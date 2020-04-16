@@ -1,0 +1,128 @@
+---
+title: "Consensus"
+output: html_document
+---
+
+#chargement package
+```{r}
+install.packages("cowplot")
+library(cowplot)
+library(xlsx)
+library(tidyverse)
+library(questionr)
+```
+
+
+
+#chargement des données
+
+```{r}
+#fichier contenant les données donneur
+meta_data <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_donor_clinical_August2016_v9.xlsx", 1, header=TRUE)
+#fichier contenant id echantillon et id donneurs (et autres info relatives aux samples)
+sample_sheet <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_sample_sheet.tsv", sep="\t", header=TRUE)
+#fichier vcf avec la ligne qu'on veut
+vcf_file <- "/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pol_1kb.vcf"
+vcf_lines <- readLines(vcf_file)
+histology <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_specimen_histology_August2016_v9.xlsx", 1, header=TRUE)
+
+#boucle pour récupérer le nom des échantillons 
+j=1
+tab = NULL
+for (i in 1:length(vcf_lines)){
+    #ligne actuelle
+    line <- vcf_lines[i]
+    #pour les noms des échantillons
+    if(str_detect(line,"^#{1}[^#]")){
+      list = str_split(as.character(line), "\t")
+    }
+    #on garde l'autre ligne (avec genotype etc)
+    else if(!str_detect(line,"^#{2}")){
+      pol = str_split(as.character(line), "\t")
+      j <- j+1
+      #autres lignes 
+      if(j>2){
+        tab <- cbind(tab, pol[[1]])
+        colnames(tab)[j] <- tab[2,j]
+      }
+      else{
+        tab <- cbind(list[[1]], pol[[1]])
+        colnames(tab) <- c("Echantillon", tab[2,j])
+      }
+    }
+}
+
+#garde que noms ech et genotype
+tab <- tab[-(1:9),] %>% as.data.frame()
+tab[,2:length(tab)] <- sapply(tab[,2:length(tab)],function(x) fct_recode(x, "0|1" = "1|0"))
+
+
+#fusions de stables ==> nom ech -> nom donneur -> genotype -> métadata
+fusion <- left_join(tab, sample_sheet[,c("aliquot_id", "icgc_donor_id", "icgc_sample_id")], by=c(Echantillon="aliquot_id")) %>% left_join(meta_data)  %>% filter(donor_wgs_included_excluded=="Included")
+
+#fusion <- left_join(tab, sample_sheet[,c("aliquot_id", "icgc_donor_id", "icgc_sample_id")], by=c(Echantillon="aliquot_id")) %>% left_join(meta_data)  %>% left_join(histology[,c(6,(12:25))], joining_by="icgc_sample_id") %>% filter(donor_wgs_included_excluded=="Included")
+
+#petites stats
+table(is.na(fusion$donor_vital_status))
+table(is.na(fusion$donor_survival_time))
+length(intersect(which(is.na(fusion$donor_vital_status)), which(is.na(fusion$donor_survival_time))))
+try <- setdiff(which(is.na(fusion$donor_vital_status)), which(is.na(fusion$donor_survival_time)))
+fusion[try,]
+
+```
+
+# quick overview
+```{r}
+fusion[,2:length(tab)] <- lapply(2:length(tab), function(l) as.factor(fusion[,l]))
+str(fusion)
+fusion$icgc_donor_id <- as.character(fusion$icgc_donor_id)
+fusion$submitted_donor_id <- as.character(fusion$submitted_donor_id)
+fusion$X..donor_unique_id <- as.character(fusion$X..donor_unique_id)
+fusion$tcga_donor_uuid <- as.character(fusion$tcga_donor_uuid)
+fusion <- fusion[,!colnames(fusion)==c("NA.", "NA..1")]
+
+help = function(k, data){
+  if(is.factor(data[,k])){
+    
+    print(freq(data[,k]))
+
+    ##pour représenter les différents snp/indel
+    if(k>=2 && k<=length(tab)){ 
+      ##on représente que les snp/indels qui ont geno >5% 
+      if(nrow(freq(data[,k]))>1){
+          if (!(nrow(freq(data[,k]))==2 && (freq(data[,k])$'%'[1]<5  || freq(data[,k])$'%'[2]<5))){ 
+            dvs <- ggplot(data) + geom_bar(aes(x = data[,k], fill = donor_vital_status)) + xlab(colnames(data)[k])
+            dvs_fill <- ggplot(data) + geom_bar(aes(x = data[,k], fill = donor_vital_status), position="fill") + xlab(colnames(data)[k])
+            plot_grid(dvs, dvs_fill, ncol = 2, nrow = 1)
+            ggsave(paste(colnames(data)[k],"donor_vital_status.pdf", sep="_"), device="pdf", path="./plots", width=15)
+            
+            both <- ggplot(data) +  geom_bar(aes(x = data[,k], fill = donor_vital_status)) + facet_wrap(~project_code) + ggtitle(colnames(data)[k]) + theme(legend.position="bottom") + xlab(colnames(data)[k])
+            both_fill <- ggplot(data) +  geom_bar(aes(x = data[,k], fill = donor_vital_status), position="fill") + facet_wrap(~project_code) + ggtitle(colnames(data)[k]) + theme(legend.position="bottom") + xlab(colnames(data)[k])
+            plot_grid(both, both_fill, ncol = 2, nrow = 1)
+            ggsave(paste(colnames(data)[k],"donor_vital_status_project_code.pdf", sep="_"), device="pdf", path="./plots", width=15)
+            
+            bp <-  ggplot(data) + geom_bar(aes(x = project_code, fill = data[,k])) + ggtitle(colnames(data)[k]) 
+            bp_fill <- ggplot(data) + geom_bar(aes(x = project_code, fill = data[,k]), position="fill")
+            plot_grid(bp, bp_fill, ncol = 1, nrow = 2)
+            ggsave(paste(colnames(data)[k],"project_code.pdf", sep="_"), device="pdf", path="./plots", width=20)
+            
+         }
+      }
+     
+    }
+    else {
+      ggplot(data) + geom_bar(aes(x = data[,k], fill = donor_vital_status)) + xlab(colnames(data)[k]) + theme(legend.position="bottom")
+      ggsave(paste(colnames(data)[k], "_vital_status.pdf", sep=""), device="pdf", path="./plots", width=15)
+
+    }
+  }
+  else if(is.numeric(data[,k])){
+    print(pdf(paste("./plots/",colnames(data)[k],".pdf", sep="")))
+    hist(data[,k], main=colnames(data)[k], xlab=colnames(data)[k])
+    dev.off()
+  }
+}
+sapply(seq_len(ncol(fusion)), help, data=fusion)
+
+```
+
