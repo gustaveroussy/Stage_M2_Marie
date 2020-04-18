@@ -18,12 +18,15 @@ library(questionr)
 ```{r}
 #fichier contenant les données donneur
 meta_data <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_donor_clinical_August2016_v9.xlsx", 1, header=TRUE)
+meta_data <- meta_data[,!colnames(meta_data)==c("NA.", "NA..1")]
 #fichier contenant id echantillon et id donneurs (et autres info relatives aux samples)
 sample_sheet <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_sample_sheet.tsv", sep="\t", header=TRUE)
 #fichier vcf avec la ligne qu'on veut
 vcf_file <- "/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pol_1kb.vcf"
 vcf_lines <- readLines(vcf_file)
 histology <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/pcawg_specimen_histology_August2016_v9.xlsx", 1, header=TRUE)
+histology <- histology[,!colnames(histology)==c("NA.", "NA..1")]
+
 
 #boucle pour récupérer le nom des échantillons 
 j=1
@@ -76,6 +79,9 @@ tab[,2:length(tab)] <- sapply(tab[,2:ncol(tab)],function(x) fct_recode(x, "0|1" 
 #fusions de stables ==> nom ech -> nom donneur -> genotype -> métadata
 fusion <- left_join(tab, sample_sheet[,c("aliquot_id", "icgc_donor_id", "icgc_sample_id")], by=c(Echantillon="aliquot_id")) %>% left_join(meta_data)  %>% filter(donor_wgs_included_excluded=="Included")
 
+histology <- histology %>% filter(specimen_library_strategy=="WGS")
+fusion <- left_join(fusion, histology[,c(9,12:ncol(histology))])
+fusion <- fusion[-(which(duplicated(fusion$Echantillon))), ]
 
 #petites stats
 table(is.na(fusion$donor_vital_status))
@@ -88,14 +94,13 @@ fusion[try,]
 
 # quick overview
 ```{r}
-fusion[,2:ncol(tab)] <- lapply(2:ncol(tab), function(l) as.factor(fusion[,l]))
 str(fusion)
+fusion[,2:ncol(tab)] <- lapply(2:ncol(tab), function(l) as.factor(fusion[,l]))
 fusion$icgc_donor_id <- as.character(fusion$icgc_donor_id)
 fusion$submitted_donor_id <- as.character(fusion$submitted_donor_id)
 fusion$X..donor_unique_id <- as.character(fusion$X..donor_unique_id)
 fusion$tcga_donor_uuid <- as.character(fusion$tcga_donor_uuid)
 fusion$icgc_sample_id <- as.character(fusion$icgc_sample_id)
-fusion <- fusion[,!colnames(fusion)==c("NA.", "NA..1")]
 
 
 
@@ -129,14 +134,14 @@ help = function(k, data){
      
     }
     else {
-      ggplot(data) + geom_bar(aes(x = data[,k], fill = donor_vital_status)) + xlab(colnames(data)[k]) + theme(legend.position="bottom") + ggtitle(paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
+      ggplot(data) + geom_bar(aes(x = data[,k], fill = donor_vital_status)) + xlab(colnames(data)[k]) + theme(legend.position="bottom") + ggtitle(paste(colnames(data)[k], sep=" "))
       ggsave(paste(colnames(data)[k], "_vital_status.pdf", sep=""), device="pdf", path="./plots", width=15)
 
     }
   }
   else if(is.numeric(data[,k])){
     print(pdf(paste("./plots/",colnames(data)[k],".pdf", sep="")))
-    hist(data[,k], main=paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "), xlab=colnames(data)[k])
+    hist(data[,k], main=paste(colnames(data)[k], sep=" "), xlab=colnames(data)[k])
     dev.off()
   }
 }
