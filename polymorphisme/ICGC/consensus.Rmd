@@ -115,7 +115,7 @@ help = function(k, data){
             ggsave(paste(colnames(data)[k],"donor_vital_status.pdf", sep="_"), device="pdf", path="./plots", width=15)
             
             both <- ggplot(data) +  geom_bar(aes(x = data[,k], fill = donor_vital_status)) + facet_wrap(~project_code) + ggtitle(paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" ")) + theme(legend.position="bottom") + xlab(colnames(data)[k])
-            both_fill <- ggplot(data) +  geom_bar(aes(x = data[,k], fill = donor_vital_status), position="fill") + facet_wrap(~project_code) +  + theme(legend.position="bottom") + xlab(colnames(data)[k])
+            both_fill <- ggplot(data) +  geom_bar(aes(x = data[,k], fill = donor_vital_status), position="fill") + facet_wrap(~project_code) + theme(legend.position="bottom") + xlab(colnames(data)[k])
             plot_grid(both, both_fill, ncol = 2, nrow = 1)
             ggsave(paste(colnames(data)[k],"donor_vital_status_project_code.pdf", sep="_"), device="pdf", path="./plots", width=15)
             
@@ -142,5 +142,80 @@ help = function(k, data){
 }
 sapply(seq_len(ncol(fusion)), help, data=fusion)
 
+```
+
+```{r}
+?fisher.test
+
+
+mat_pvalue_cohorte <- matrix(NA, ncol = ncol(tab)-1, nrow = 1)
+colnames(mat_pvalue_chorote) <- colnames(tab[2:ncol(tab)])
+rownames(mat_pvalue_cohorte)<- "pvalue"
+error_cohorte = NULL 
+uniq = NULL
+
+system.time(
+
+for (k in 2:ncol(tab)){
+  print(colnames(fusion)[k])
+  #on enlève là où il y a un seul génotype
+  if(nrow(freq(fusion[,k]))>1 ){
+    conting <- table(fusion[,k], fusion$project_code)
+    test <- try(fisher.test(conting), silent = TRUE)
+    if (is(test) == "try-error") {
+      print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
+      test <- fisher.test(conting, simulate.p.value=T, B=1E+6)
+      error_cohorte <- c(error, colnames(fusion)[k])
+    }
+    mat_pvalue_cohorte[1,k-1] <- test$p.value 
+  }
+  else{
+    print("1 seul génotype")
+    uniq <- c(uniq, colnames(fusion)[k])
+  }
+}   
+
+)
+
+signif_cohorte <- colnames(mat_pvalue)[which(mat_pvalue < 0.05)]
+length(signif_cohorte)
+length(intersect(signif_cohorte, error_cohorte))
+
+
+mat_pvalue_death <- matrix(NA, ncol = ncol(tab)-1, nrow = 1)
+colnames(mat_pvalue_death) <- colnames(tab[2:ncol(tab)])
+rownames(mat_pvalue_death)<- "pvalue"
+error_death = NULL 
+uniq = NULL
+
+system.time(
+
+for (k in 2:ncol(tab)){
+  print(colnames(fusion)[k])
+  #on enlève là où il y a un seul génotype
+  if(nrow(freq(fusion[,k]))>1 ){
+    conting <- table(fusion[,k], fusion$donor_vital_status)
+    test <- try(fisher.test(conting), silent = TRUE)
+    if (is(test) == "try-error") {
+      print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
+      test <- fisher.test(conting, simulate.p.value=T, B=1E+6)
+      error_death <- c(error_death, colnames(fusion)[k])
+    }
+    mat_pvalue_death[1,k-1] <- test$p.value 
+  }
+  else{
+    print("1 seul génotype")
+    uniq <- c(uniq, colnames(fusion)[k])
+  }
+}   
+
+)
+
+signif_death <- colnames(mat_pvalue)[which(mat_pvalue < 0.05)]
+length(signif_death)
+length(intersect(signif_death, error_death))
+
+
+length(intersect(signif_cohorte, signif_death))
 ```
 
