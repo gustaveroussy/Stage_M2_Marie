@@ -9,6 +9,8 @@ library(cowplot)
 library(xlsx)
 library(tidyverse)
 library(questionr)
+library(survival)
+library(survminer)
 ```
 
 
@@ -90,10 +92,6 @@ length(intersect(which(is.na(fusion$donor_vital_status)), which(is.na(fusion$don
 try <- setdiff(which(is.na(fusion$donor_vital_status)), which(is.na(fusion$donor_survival_time)))
 fusion[try,]
 
-```
-
-# quick overview
-```{r}
 str(fusion)
 fusion[,2:ncol(tab)] <- lapply(2:ncol(tab), function(l) as.factor(fusion[,l]))
 fusion$icgc_donor_id <- as.character(fusion$icgc_donor_id)
@@ -101,8 +99,10 @@ fusion$submitted_donor_id <- as.character(fusion$submitted_donor_id)
 fusion$X..donor_unique_id <- as.character(fusion$X..donor_unique_id)
 fusion$tcga_donor_uuid <- as.character(fusion$tcga_donor_uuid)
 fusion$icgc_sample_id <- as.character(fusion$icgc_sample_id)
+```
 
-
+# quick overview & graphs
+```{r}
 
 help = function(k, data){
   if(is.factor(data[,k])){
@@ -149,6 +149,7 @@ sapply(seq_len(ncol(fusion)), help, data=fusion)
 
 ```
 
+#Fisher
 ```{r}
 ?fisher.test
 
@@ -222,5 +223,79 @@ length(intersect(signif_death, error_death))
 
 
 length(intersect(signif_cohorte, signif_death))
+```
+
+
+#prepare data
+```{r}
+fusion_na <- fusion[!is.na(fusion$donor_survival_time),]
+fusion_na$death = ifelse(fusion_na$donor_vital_status=="alive", 0, 1)
+```
+
+
+#KM
+```{r}
+
+KM<-survfit(Surv(donor_survival_time, death) ~ 1,data=fusion_na, conf.type="log-log")
+summary(KM)
+KM
+plot(KM,xlab="Time from inclusion (days)", ylab="Probability of survival", main="Overall survival")
+ggsurvplot(KM,risk.table = TRUE,break.time.by = 1000)
+
+KMy<-survfit(Surv(donor_survival_time/365.25, death) ~ 1,data=fusion_na, conf.type="log-log")
+plot(KMy,xlab="Time from inclusion (years)", ylab="Probability of survival", main="Overall survival")
+ggsurvplot(KMy,risk.table = TRUE)
+
+
+```
+
+```{r}
+KM_geno<-survfit(Surv(donor_survival_time, death) ~ fusion_na$`21017240`, data=fusion_na, conf.type="log-log")
+ggsurvplot(KM_geno,risk.table = TRUE,break.time.by = 1000)
+
+KMy_geno<-survfit(Surv(donor_survival_time/365.25, death) ~ fusion_na$`21017240`,data=fusion_na, conf.type="log-log")
+ggsurvplot(KMy_geno,risk.table = TRUE)
+
+
+survdiff(Surv(donor_survival_time, death) ~ fusion_na$`21017240`, data=fusion_na)
+
+```
+
+```{r}
+KM_geno_project<-survfit(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + project_code, data=fusion_na, conf.type="log-log")
+ggsurvplot(KM_geno_project,risk.table = TRUE,break.time.by = 1000)
+
+KMy_geno_project<-survfit(Surv(donor_survival_time/365.25, death) ~ fusion_na$`21017240` + project_code ,data=fusion_na, conf.type="log-log")
+ggsurvplot(KMy_geno_project,risk.table = TRUE)
+
+
+survdiff(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + project_code, data=fusion_na)
+```
+
+```{r}
+KM_project<-survfit(Surv(donor_survival_time, death) ~ project_code, data=fusion_na, conf.type="log-log")
+ggsurvplot(KM_project,risk.table = TRUE,break.time.by = 1000)
+
+KMy_project<-survfit(Surv(donor_survival_time/365.25, death) ~ project_code ,data=fusion_na, conf.type="log-log")
+ggsurvplot(KMy_project,risk.table = TRUE)
+
+
+survdiff(Surv(donor_survival_time, death) ~ project_code, data=fusion_na)
+```
+
+
+#Cox
+```{r}
+fitCox0 <-coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240`, data=fusion_na)
+fitCox0
+
+fitCoxcomplet <- coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + donor_sex + donor_age_at_diagnosis + project_code,  data=fusion_na)
+fitCoxcomplet
+```
+
+```{r}
+cox.zph(fitCox0)
+plot(cox.zph(fitCox0))
+
 ```
 
