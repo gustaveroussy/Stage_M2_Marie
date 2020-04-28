@@ -172,9 +172,9 @@ help = function(k, data){
 
 #variable = le nom de la colonne qu'on veut regarder
 fisher <- function(variable){
-  mat_pvalue <- matrix(NA, ncol = ncol(tab)-1, nrow = 1)
+  mat_pvalue <- matrix(NA, ncol = ncol(tab)-1, nrow = 2)
   colnames(mat_pvalue) <- colnames(tab[2:ncol(tab)])
-  rownames(mat_pvalue)<- paste("pvalue", variable, sep="_")
+  rownames(mat_pvalue)<- c(paste("pvalue", variable, sep="_"), paste("pvalue_adjust", variable, sep="_"))
   error_cohorte = NULL 
 
     for (k in 2:ncol(tab)){
@@ -182,7 +182,11 @@ fisher <- function(variable){
       #on enlève là où il y a un seul génotype
       if(nrow(freq(fusion[,k]))>1 ){
         conting <- table(fusion[,k], fusion[,which(colnames(fusion)==variable)])
-        #write.table(conting, paste("./conting/", colnames(fusion)[k],".txt", sep=""))
+        #write.table(conting, paste("./Fisher/conting/", colnames(fusion)[k],".txt", sep=""))
+
+        conting_freq <- prop.table(table(fusion[,k], fusion[,which(colnames(fusion)==variable)]), margin=2)
+        write.table(conting_freq, paste("./Fisher/conting_freq/", colnames(fusion)[k],".txt", sep=""))
+
         test <- try(fisher.test(conting), silent = TRUE)
         if (is(test) == "try-error") {
           print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
@@ -195,15 +199,16 @@ fisher <- function(variable){
         print("1 seul génotype")
       }
     }  
+  mat_pvalue[2, ]  <- p.adjust(mat_pvalue[1,], method = "BH")
   return(mat_pvalue)
 }
 
 mat_pvalue_cohorte = NULL
 mat_pvalue_cohorte <- fisher("project_code")
-mat_pvalue_cohorte_adjust <- p.adjust(mat_pvalue_cohorte, method = "BH")
+write.table(mat_pvalue_cohorte, "./mat_pvalue_project_code_genotype.txt")
 
-signif_cohorte <- colnames(mat_pvalue_cohorte)[which(mat_pvalue_cohorte < 0.05)]
-signif_cohorte_adjust <- colnames(mat_pvalue_cohorte_adjust)[which(mat_pvalue_cohorte_adjust < 0.05)]
+signif_cohorte <- colnames(mat_pvalue_cohorte)[which(mat_pvalue_cohorte[1,] < 0.05)]
+signif_cohorte_adjust <- colnames(mat_pvalue_cohorte)[which(mat_pvalue_cohorte[2,] < 0.05)]
 length(signif_cohorte_adjust)
 
 mat_pvalue_death = NULL
@@ -215,6 +220,105 @@ signif_cohorte_adjust <- colnames(mat_pvalue_cohorte_adjust)[which(mat_pvalue_co
 
 length(intersect(signif_cohorte, signif_death))
 ```
+
+
+```{r}
+
+random_file <- "/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/random.vcf"
+random_lines <- readLines(random_file)
+
+#boucle pour récupérer le nom des échantillons 
+j=1
+random = NULL
+info_random=NULL
+pol_random = NULL
+list=NULL
+for (i in 1:length(random_lines)){
+    #ligne actuelle
+    line <- random_lines[i]
+    #on garde l'autre ligne (avec genotype etc)
+    if(!str_detect(line,"^#")){
+      
+      pol_random = str_split(as.character(line), "\t")
+      j <- j+1
+      #autres lignes 
+      if(j>2){
+        #info
+        info_random <- cbind(info_random, pol_random[[1]][1:9])
+        colnames(info_random)[j-1] <- info_random[2,j-1]
+        
+        #on garde que l'information du génotype
+        random <- cbind(random, pol_random[[1]][10:length(pol_random[[1]])])
+      }
+      #création des tables 
+      else{ 
+        info_random <- pol_random[[1]][1:9]
+        random <- cbind(list, pol_random[[1]][10:length(pol_random[[1]])])
+      }
+    }
+}
+
+colnames(random) <-  info_random[2,]
+colnames(info_random) <- info_random[2,]
+rownames(info_random) <- list_info 
+
+random <- as.data.frame(random)
+info_random <- as.data.frame(info_random)
+
+tab_random <- cbind(tab, random)
+
+#fusions de stables ==> nom ech -> nom donneur -> genotype -> métadata
+fusion_random <- left_join(tab_random, sample_sheet[,c("aliquot_id", "icgc_donor_id", "icgc_sample_id")], by=c(Echantillon="aliquot_id")) %>% left_join(meta_data)  %>% filter(donor_wgs_included_excluded=="Included")
+
+fusion_random[,2:length(tab_random)] <- sapply(fusion_random[,2:ncol(tab_random)],function(x) fct_recode(x, "0|1" = "1|0"))
+
+fusion_random <- left_join(fusion_random, histology[,c(9,12:ncol(histology))])
+fusion_random <- fusion_random[-(which(duplicated(fusion_random$Echantillon))), ]
+
+
+mat_pvalue <- matrix(NA, ncol = ncol(tab)-1, nrow = 2)
+rownames(mat_pvalue) <- c("pvalue", "pvalue_adj")
+names=NULL
+pvalues=NULL
+
+for (i in levels(fusion_random$project_code)){
+  pvalue=NULL
+  lignes = which(fusion_random$project_code==i)
+  print(i)
+  
+  if(length(lignes)>0){
+
+    conting = NULL
+    for (j in 2:length(tab_random)){
+      conting <- rbind(conting, table(factor(fusion_random[lignes,j], levels=c("0|0", "0|1", "1|1"))))
+    }
+    rownames(conting) = colnames(tab_random)[2:length(tab_random)]
+    conting <- t(conting)
+    write.table(conting, paste("./Fisher/",i,".txt", sep=""))
+    test <- try(fisher.test(as.matrix(conting)), silent = TRUE)
+        
+    if (is(test) == "try-error") {
+      print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
+      test <- fisher.test(as.matrix(conting), simulate.p.value=T, B=1E+6)
+    }
+    pvalues <- c(pvalues,test$p.value)
+  }
+}
+mat_pvalues[1,] <- pvalues
+mat_pvalue[2, ]  <- p.adjust(mat_pvalue[1,], method = "BH")
+
+colnames(mat_pvalue) <- names
+
+
+
+write.table(mat_pvalue_cohorte, "./mat_pvalue_project_code_genotype.txt")
+
+
+
+```
+
+
+
 
 
 #prepare data
