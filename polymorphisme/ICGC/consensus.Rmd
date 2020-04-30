@@ -175,23 +175,21 @@ fisher <- function(variable){
   mat_pvalue <- matrix(NA, ncol = ncol(tab)-1, nrow = 2)
   colnames(mat_pvalue) <- colnames(tab[2:ncol(tab)])
   rownames(mat_pvalue)<- c(paste("pvalue", variable, sep="_"), paste("pvalue_adjust", variable, sep="_"))
-  error_cohorte = NULL 
 
     for (k in 2:ncol(tab)){
       print(colnames(fusion)[k])
       #on enlève là où il y a un seul génotype
       if(nrow(freq(fusion[,k]))>1 ){
         conting <- table(fusion[,k], fusion[,which(colnames(fusion)==variable)])
-        #write.table(conting, paste("./Fisher/conting/", colnames(fusion)[k],".txt", sep=""))
+        #write.table(conting, paste("./Fisher/snp_vs_cohorte/conting/", colnames(fusion)[k],".txt", sep=""))
 
         conting_freq <- prop.table(table(fusion[,k], fusion[,which(colnames(fusion)==variable)]), margin=2)
-        write.table(conting_freq, paste("./Fisher/conting_freq/", colnames(fusion)[k],".txt", sep=""))
+        #write.table(conting_freq, paste("./Fisher/snp_vs_cohorte/conting_freq/", colnames(fusion)[k],".txt", sep=""))
 
         test <- try(fisher.test(conting), silent = TRUE)
         if (is(test) == "try-error") {
           print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
           test <- fisher.test(conting, simulate.p.value=T, B=1E+6)
-          error <- c(error, colnames(fusion)[k])
         }
         mat_pvalue[1,k-1] <- test$p.value 
       }
@@ -205,23 +203,16 @@ fisher <- function(variable){
 
 mat_pvalue_cohorte = NULL
 mat_pvalue_cohorte <- fisher("project_code")
-write.table(mat_pvalue_cohorte, "./mat_pvalue_project_code_genotype.txt")
+#write.table(mat_pvalue_cohorte, "./mat_pvalue_snp_vs_cohorte.txt")
 
 signif_cohorte <- colnames(mat_pvalue_cohorte)[which(mat_pvalue_cohorte[1,] < 0.05)]
 signif_cohorte_adjust <- colnames(mat_pvalue_cohorte)[which(mat_pvalue_cohorte[2,] < 0.05)]
 length(signif_cohorte_adjust)
 
-mat_pvalue_death = NULL
-mat_pvalue_death <- fisher("donor_vital_status")
-mat_pvalue_death_adjust <- p.adjust(mat_pvalue_death, method = "BH")
-signif_death <- colnames(mat_pvalue_death)[which(mat_pvalue_death < 0.05)]
-signif_cohorte_adjust <- colnames(mat_pvalue_cohorte_adjust)[which(mat_pvalue_cohorte_adjust < 0.05)]
 
-
-length(intersect(signif_cohorte, signif_death))
 ```
 
-
+## Fisher 1 maladie vs snp avec inclusion de 10 snps randoms 
 ```{r}
 
 random_file <- "/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/random.vcf"
@@ -276,8 +267,7 @@ fusion_random <- left_join(fusion_random, histology[,c(9,12:ncol(histology))])
 fusion_random <- fusion_random[-(which(duplicated(fusion_random$Echantillon))), ]
 
 
-mat_pvalue <- matrix(NA, ncol = ncol(tab)-1, nrow = 2)
-rownames(mat_pvalue) <- c("pvalue", "pvalue_adj")
+
 names=NULL
 pvalues=NULL
 
@@ -287,33 +277,34 @@ for (i in levels(fusion_random$project_code)){
   print(i)
   
   if(length(lignes)>0){
-
+    names <- c(names, i)
     conting = NULL
-    for (j in 2:length(tab_random)){
-      conting <- rbind(conting, table(factor(fusion_random[lignes,j], levels=c("0|0", "0|1", "1|1"))))
+    conting_random = NULL
+    for (j in 2:length(tab)){
+      conting <- cbind(conting, table(factor(fusion_random[lignes,j], levels=c("0|0", "0|1", "1|1"))))
     }
-    rownames(conting) = colnames(tab_random)[2:length(tab_random)]
-    conting <- t(conting)
-    write.table(conting, paste("./Fisher/",i,".txt", sep=""))
-    test <- try(fisher.test(as.matrix(conting)), silent = TRUE)
-        
-    if (is(test) == "try-error") {
-      print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
-      test <- fisher.test(as.matrix(conting), simulate.p.value=T, B=1E+6)
+    for(k in which(colnames(tab_random) %in% colnames(random))){
+      conting_random <- cbind(conting_random, table(factor(fusion_random[lignes,k], levels=c("0|0", "0|1", "1|1"))))
     }
+    conting <- cbind(conting, rowSums(conting_random))
+    colnames(conting) = c(colnames(tab_random)[2:length(tab)], "random")
+    write.table(conting, paste("./Fisher/cohorte_vs_snp/conting/",i,".txt", sep=""))
+    
+    #comme c'est trop long en normal ou en hybride on fait directement une simulation
+    test <- try(fisher.test(as.matrix(conting), hybrid=TRUE, simulate.p.value=T, B=1E+6), silent = TRUE)
+    
+    #if (is(test) == "try-error") {
+     # print(" Direct p-value computation failed. Trying in simulated mode (MCMC).")
+      #test <- fisher.test(as.matrix(conting), simulate.p.value=T, B=1E+6)
+    #}
     pvalues <- c(pvalues,test$p.value)
   }
 }
-mat_pvalues[1,] <- pvalues
-mat_pvalue[2, ]  <- p.adjust(mat_pvalue[1,], method = "BH")
-
+mat_pvalue <- matrix(c(pvalues, p.adjust(pvalues, method = "BH")), nrow=2, ncol=length(pvalues), byrow=TRUE)
+rownames(mat_pvalue) <- c("pvalue", "pvalue_adjust")
 colnames(mat_pvalue) <- names
 
-
-
-write.table(mat_pvalue_cohorte, "./mat_pvalue_project_code_genotype.txt")
-
-
+write.table(mat_pvalue, "./Fisher/mat_pvalue_cohorte_vs_snp.txt")
 
 ```
 
@@ -325,6 +316,7 @@ write.table(mat_pvalue_cohorte, "./mat_pvalue_project_code_genotype.txt")
 ```{r}
 fusion_na <- fusion[!is.na(fusion$donor_survival_time),]
 fusion_na$death = ifelse(fusion_na$donor_vital_status=="alive", 0, 1)
+#fusion_na$death <- as.factor(fusion_na$death)
 ```
 
 
@@ -355,27 +347,92 @@ ggsave(plot=print(survpy), "Survie_cohorte_years.pdf", device="pdf", path="./sur
   
 survie <- function(k, data){
   #survie cohorte
+  #en jours
   KM_geno<- survfit(Surv(donor_survival_time, death) ~ data[,k], data= data, conf.type="log-log")
   survpd <- ggsurvplot(KM_geno,risk.table = TRUE,break.time.by = 1000, data=data, title=paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
   ggsave(plot=print(survpd), paste(colnames(data)[k], "days_geno.pdf", sep="_"), device="pdf", path="./survie", width=15)
 
-  
+  #en années
   KMy_geno<-survfit(Surv(donor_survival_time/365.25, death) ~ data[,k], data=data, conf.type="log-log")
   survpy <- ggsurvplot(KMy_geno,risk.table = TRUE,  data=data, title=paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" ")) 
   ggsave(plot=print(survpy), paste(colnames(data)[k], "years_geno.pdf", sep="_"), device="pdf", path="./survie", width=15)
 
   #survie genotype + cohorte
-  KM_geno_project<-survfit(Surv(donor_survival_time, death) ~ data[,k] + project_code, data=data, conf.type="log-log")
-  survpd <- ggsurvplot(KM_geno_project,risk.table = TRUE,break.time.by = 1000,  data=data, title= paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
-  ggsave(plot=print(survpd), paste(colnames(data)[k], "days_geno_cohorte.pdf", sep="_"), device="pdf", path="./survie", width=15)
+  #KM_geno_project<-survfit(Surv(donor_survival_time, death) ~ data[,k] + project_code, data=data, conf.type="log-log")
+  #survpd <- ggsurvplot(KM_geno_project,risk.table = TRUE,break.time.by = 1000,  data=data, title= paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
+  #ggsave(plot=print(survpd), paste(colnames(data)[k], "days_geno_cohorte.pdf", sep="_"), device="pdf", path="./survie", width=15)
 
-  KMy_geno_project<-survfit(Surv(donor_survival_time/365.25, death) ~ data[,k] + project_code , data=data, conf.type="log-log")
-  survpy <- ggsurvplot(KMy_geno_project,risk.table = TRUE,  data=data, title=paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
-  ggsave(plot=print(survpy), paste(colnames(data)[k], "years_geno_cohorte.pdf", sep="_"), device="pdf", path="./survie", width=15)
+  #KMy_geno_project<-survfit(Surv(donor_survival_time/365.25, death) ~ data[,k] + project_code , data=data, conf.type="log-log")
+  #survpy <- ggsurvplot(KMy_geno_project,risk.table = TRUE,  data=data, title=paste(colnames(data)[k], info["REF", k-1], "-->", info["ALT", k-1], sep=" "))
+  #ggsave(plot=print(survpy), paste(colnames(data)[k], "years_geno_cohorte.pdf", sep="_"), device="pdf", path="./survie", width=15)
 
 }
 
 sapply(2:ncol(tab), survie, data= fusion_na)
+
+
+#survie par cohorte
+signif=NULL
+signif <- signif_cohorte_adjust[-c(1,3)] #après analyse deux snps ne montrent rien de particulier
+
+#fusion_na[,2:ncol(tab)] <- lapply(2:ncol(tab), function(l) as.numeric(fusion_na[,l]))
+
+for (i in names){
+  print(i)
+  lignes = which(fusion_na$project_code==i)
+  
+  if (length(lignes) > 0){
+    if(!dir.exists(paste("./Survie/nouveau/", i, sep=""))){
+      dir.create(paste("./Survie/nouveau/", i, sep=""))
+    }
+    for (j in signif){
+      print(j)
+      data <- fusion_na[lignes, ]
+      
+      #en jours
+      KM_geno<- survfit(Surv(donor_survival_time, death) ~  data[,j], data= data, conf.type="log-log")
+
+      survpd <- try(ggsurvplot(KM_geno,risk.table = TRUE, break.time.by = 1000, data=data, conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
+      if(!is(survpd)=="try-error"){
+        try <- try(ggsave(plot=print(survpd), paste(i,j, "days_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15), silent=TRUE)
+      
+        if (is(try) == "try-error") {
+          print("Une seule donnée, impossible de faire un interval de confiance")
+          survpd <- ggsurvplot(KM_geno,risk.table = TRUE, break.time.by = 1000, data=data, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" "))
+  
+          ggsave(plot=print(survpd), paste(i,j, "days_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15)
+        }
+      
+      }
+        
+      
+      #en années
+      KMy_geno<-survfit(Surv(donor_survival_time/365.25, death) ~ data[,j], data=data, conf.type="log-log")
+      survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
+      
+      if(!is(survpy)=="try-error"){
+        try <- try(ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15), silent=TRUE)
+      
+        if (is(try) == "try-error") {
+          print("Une seule donnée, impossible de faire un interval de confiance")
+          survpy <- ggsurvplot(KMy_geno,risk.table = TRUE,  data=data, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")) 
+          ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15)
+        }
+        
+      }
+      else{
+        print("Impossible de représenter" )
+      }
+      
+      fitCox0 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
+      save(fitCox0, file=paste("./Survie/nouveau/",i,"/cox_", i,"_", j, ".RData", sep=""))
+    }
+  }
+  else{
+    print("Aucune donnée de survie")
+  }
+  
+}
 
 ```
 
@@ -387,15 +444,20 @@ cox <- function(k, data){
   
     fitCox0 <-coxph(Surv(donor_survival_time, death) ~ data[,k], data=data)
     
-    fitCoxComplet <- coxph(Surv(donor_survival_time, death) ~ data[,k] + donor_sex + donor_age_at_diagnosis + project_code,  data= data)
+    #fitCoxComplet <- coxph(Surv(donor_survival_time, death) ~ data[,k] + donor_sex + donor_age_at_diagnosis + project_code,  data= data)
     
     save(fitCox0, file=paste("./Cox_simple/",colnames(data)[k], ".RData"))
-    save(fitCoxComplet, file=paste("./Cox_complet/", colnames(data)[k], ".RData"))
+    #save(fitCoxComplet, file=paste("./Cox_complet/", colnames(data)[k], ".RData"))
     
   }
 }
 
 sapply(2:ncol(tab), cox, data=fusion_na)
+
+
+
+
+
 
 ```
 
