@@ -539,6 +539,16 @@ write.table(mat_pvalue_survie1, "./Survie//Nouveau/mat_pvalue_0|0_vs_0|1.txt")
 write.table(mat_pvalue_survie2, "./Survie//Nouveau/mat_pvalue_0|0_vs_1|1.txt")
 write.table(mat_pvalue_survie3, "./Survie//Nouveau/mat_pvalue_0|1_vs_1|1.txt")
 
+mat_pvalue_survie_ajdust <- matrix(p.adjust(mat_pvalue_survie, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie1_adjust <- matrix(p.adjust(mat_pvalue_survie1, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie2_ajdust <- matrix(p.adjust(mat_pvalue_survie2, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie3_ajdust <- matrix(p.adjust(mat_pvalue_survie3, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+
+
+write.table(mat_pvalue_survie_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_all.txt")
+write.table(mat_pvalue_survie1_adjust, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_0|1.txt")
+write.table(mat_pvalue_survie2_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_1|1.txt")
+write.table(mat_pvalue_survie3_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_0|1_vs_1|1.txt")
 
 ```
 

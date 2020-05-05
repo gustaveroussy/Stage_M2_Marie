@@ -1,0 +1,42 @@
+---
+title: "CADD"
+output: html_document
+---
+```{r}
+library(xlsx)
+library(ggplot2)
+```
+
+
+
+
+```{r}
+cadd <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/CADD.xlsx", 1, startRow=2, header=TRUE)
+
+plot <- ggplot(cadd) + geom_point(aes(x=POS, y=PHRED, color=PHRED)) +   
+  scale_color_gradient("PHRED", low = "green", high = "red") +
+  geom_hline(yintercept = 10, color="red")
+print(plot)
+ggsave(plot=plot, "./CADD/cadd_pos_phred.pdf", device="pdf", width = 15)
+```
+
+```{r}
+corpvalue <- matrix(NA, ncol=3, nrow=2, dimnames=list(c("pvalue","correlation"), c("Pearson", "Kendall", "Spearman")))
+
+cadd_cor_pearson <- cor.test(x=cadd$POS, y=cadd$PHRED, method="pearson")
+cadd_cor_kendall <- cor.test(x=cadd$POS, y=cadd$PHRED, method="kendall")
+cadd_cor_spearman <- cor.test(x=cadd$POS, y=cadd$PHRED, method="spearman")
+
+corpvalue[1,1] <- cadd_cor_pearson$p.value
+corpvalue[2,1] <- cadd_cor_pearson$estimate
+
+corpvalue[1,2] <- cadd_cor_kendall$p.value
+corpvalue[2,2] <- cadd_cor_kendall$estimate
+
+
+corpvalue[1,3] <- cadd_cor_spearman$p.value
+corpvalue[2,3] <- cadd_cor_spearman$estimate
+
+write.table(corpvalue, "./CADD/cadd_cor_pvalue.txt")
+```
+
