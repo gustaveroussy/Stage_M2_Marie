@@ -11,6 +11,7 @@ library(tidyverse)
 library(questionr)
 library(survival)
 library(survminer)
+library(FactoMineR)
 ```
 
 
@@ -279,9 +280,6 @@ for (i in levels(fusion_random$project_code)){
   if(length(lignes)>0){
     names <- c(names, i)
     conting = NULL
-    conting1 = NULL
-    conting2 =NULL
-    conting3 =NULL
     conting_random = NULL
     for (j in 2:length(tab)){
       conting <- cbind(conting, table(factor(fusion_random[lignes,j], levels=c("0|0", "0|1", "1|1"))))
@@ -374,16 +372,23 @@ survie <- function(k, data){
 sapply(2:ncol(tab), survie, data= fusion_na)
 
 
+```
+
+
+```{r}
 #survie par cohorte
 signif=NULL
 signif <- signif_cohorte_adjust[-c(1,3)] #après analyse deux snps ne montrent rien de particulier
-
 #fusion_na[,2:ncol(tab)] <- lapply(2:ncol(tab), function(l) as.numeric(fusion_na[,l]))
-
 mat_pvalue_survie <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie1 <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie2 <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie3 <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+
+mat_pvalue_survie_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie1_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie2_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie3_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 
 for (i in names){
   print(i)
@@ -403,31 +408,16 @@ for (i in names){
       data <- fusion_na[lignes, ]
       #0|0 vs 0|1
       data1 <- data[which(data[,j] %in% c("0|0", "0|1")),]
+      data1[,j] <- factor(data1[,j]) 
+
       #0|0 vs 1|1
       data2 <- data[which(data[,j] %in% c("0|0", "1|1")),]
+      data2[,j] <- factor(data2[,j]) 
+
       #0|1 vs 1|1 
       data3 <- data[which(data[,j] %in% c("0|1", "1|1")),]
-      
-      # #en jours
-      # KM_geno<- survfit(Surv(donor_survival_time, death) ~  data[,j], data= data, conf.type="log-log")
-      # KM_geno1<- survfit(Surv(donor_survival_time, death) ~  data[,j], data= data1, conf.type="log-log")
-      # KM_geno2<- survfit(Surv(donor_survival_time, death) ~  data[,j], data= data2, conf.type="log-log")
-      # KM_geno3<- survfit(Surv(donor_survival_time, death) ~  data[,j], data= data3, conf.type="log-log")
-      
+      data3[,j] <- factor(data3[,j]) 
 
-      # survpd <- try(ggsurvplot(KM_geno,risk.table = TRUE, break.time.by = 1000, data=data, conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
-      # if(!is(survpd)=="try-error"){
-      #   try <- try(ggsave(plot=print(survpd), paste(i,j, "days_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15), silent=TRUE)
-      # 
-      #   if (is(try) == "try-error") {
-      #     print("Une seule donnée, impossible de faire un interval de confiance")
-      #     survpd <- ggsurvplot(KM_geno,risk.table = TRUE, break.time.by = 1000, data=data, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" "))
-      # 
-      #     ggsave(plot=print(survpd), paste(i,j, "days_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/nouveau/",i,"/", sep=""), width=15)
-      #   }
-      # 
-      # }
-        
       
       #en années
       #data
@@ -435,8 +425,10 @@ for (i in names){
       mat_pvalue_survie[i,j] <- try(surv_pvalue(KMy_geno, data=data)$pval, silent=TRUE)
       survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
       
+      fitCox0 <- NULL
       fitCox0 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
-      save(fitCox0, file=paste("./Survie/nouveau/",i,"/cox_", i,"_", j, ".RData", sep=""))
+      mat_pvalue_survie_cox[i,j] <- summary(fitCox0)$logtest[3]
+      #save(fitCox0, file=paste("./Survie/nouveau/",i,"/cox_", i,"_", j, ".RData", sep=""))
       
       if(!is(survpy)=="try-error"){
         try <- try(ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
@@ -459,8 +451,10 @@ for (i in names){
         mat_pvalue_survie1[i,j] <- try(surv_pvalue(KMy_geno, data=data1)$pval, silent=TRUE)
         survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data1,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
         
-        fitCox01 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
-        save(fitCox01, file=paste("./Survie/nouveau/",i,"/cox_0|0_vs_0|1", i,"_", j, ".RData", sep=""))
+        fitCox01 <- NULL
+        fitCox01 <-coxph(Surv(donor_survival_time, death) ~ data1[,j], data=data1)
+        mat_pvalue_survie1_cox[i,j] <- summary(fitCox01)$logtest[3]
+        #save(fitCox01, file=paste("./Survie/nouveau/",i,"/cox_0|0_vs_0|1", i,"_", j, ".RData", sep=""))
         
         if(!is(survpy)=="try-error"){
           try <- try(ggsave(plot=print(survpy), paste(i, j, "0|0_vs_0|1_years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
@@ -484,8 +478,9 @@ for (i in names){
         mat_pvalue_survie2[i,j] <- try(surv_pvalue(KMy_geno, data=data2)$pval, silent=TRUE)
         survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data2,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
         
-        fitCox02 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
-        save(fitCox02, file=paste("./Survie/nouveau/",i,"/cox_0|0_vs_1|1", i,"_", j, ".RData", sep=""))
+        fitCox02 <- NULL
+        fitCox02 <-coxph(Surv(donor_survival_time, death) ~ data2[,j], data=data2)
+        mat_pvalue_survie2_cox[i,j] <- summary(fitCox02)$logtest[3]
       
         if(!is(survpy)=="try-error"){
           try <- try(ggsave(plot=print(survpy), paste(i, j, "0|0_vs_1|1_years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
@@ -509,8 +504,10 @@ for (i in names){
         mat_pvalue_survie3[i,j] <- try(surv_pvalue(KMy_geno, data=data3)$pval, silent=TRUE)
         survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data3,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
         
-        fitCox03 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
-        save(fitCox03, file=paste("./Survie/nouveau/",i,"/cox_0|1_vs_1|1", i,"_", j, ".RData", sep=""))
+        fitCox03 <- NULL
+        fitCox03 <-coxph(Surv(donor_survival_time, death) ~ data3[,j], data=data3)
+        mat_pvalue_survie3_cox[i,j] <- summary(fitCox03)$logtest[3]
+        #save(fitCox03, file=paste("./Survie/nouveau/",i,"/cox_0|1_vs_1|1", i,"_", j, ".RData", sep=""))
       
         if(!is(survpy)=="try-error"){
           try <- try(ggsave(plot=print(survpy), paste(i, j, "0|1_vs_1|1_years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
@@ -533,22 +530,89 @@ for (i in names){
     print("Aucune donnée de survie")
   }
 }
-
+#KM
 write.table(mat_pvalue_survie, "./Survie//Nouveau/mat_pvalue_all.txt")
 write.table(mat_pvalue_survie1, "./Survie//Nouveau/mat_pvalue_0|0_vs_0|1.txt")
 write.table(mat_pvalue_survie2, "./Survie//Nouveau/mat_pvalue_0|0_vs_1|1.txt")
 write.table(mat_pvalue_survie3, "./Survie//Nouveau/mat_pvalue_0|1_vs_1|1.txt")
-
 mat_pvalue_survie_ajdust <- matrix(p.adjust(mat_pvalue_survie, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie1_adjust <- matrix(p.adjust(mat_pvalue_survie1, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie2_ajdust <- matrix(p.adjust(mat_pvalue_survie2, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie3_ajdust <- matrix(p.adjust(mat_pvalue_survie3, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
-
-
 write.table(mat_pvalue_survie_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_all.txt")
 write.table(mat_pvalue_survie1_adjust, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_0|1.txt")
 write.table(mat_pvalue_survie2_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_1|1.txt")
 write.table(mat_pvalue_survie3_ajdust, "./Survie//Nouveau/mat_pvalue_ajust_0|1_vs_1|1.txt")
+
+#Cox
+write.table(mat_pvalue_survie_cox, "./Survie//Nouveau/mat_pvalue_all_cox.txt")
+write.table(mat_pvalue_survie1_cox, "./Survie//Nouveau/mat_pvalue_0|0_vs_0|1_cox.txt")
+write.table(mat_pvalue_survie2_cox, "./Survie//Nouveau/mat_pvalue_0|0_vs_1|1_cox.txt")
+write.table(mat_pvalue_survie3_cox, "./Survie//Nouveau/mat_pvalue_0|1_vs_1|1_cox.txt")
+mat_pvalue_survie_ajdust_cox <- matrix(p.adjust(mat_pvalue_survie_cox, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie1_adjust_cox <- matrix(p.adjust(mat_pvalue_survie1_cox, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie2_ajdust_cox <- matrix(p.adjust(mat_pvalue_survie2_cox, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+mat_pvalue_survie3_ajdust_cox <- matrix(p.adjust(mat_pvalue_survie3_cox, method="BH"), ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
+write.table(mat_pvalue_survie_ajdust_cox, "./Survie//Nouveau/mat_pvalue_ajust_all_cox.txt")
+write.table(mat_pvalue_survie1_adjust_cox, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_0|1_cox.txt")
+write.table(mat_pvalue_survie2_ajdust_cox, "./Survie//Nouveau/mat_pvalue_ajust_0|0_vs_1|1_cox.txt")
+write.table(mat_pvalue_survie3_ajdust_cox, "./Survie//Nouveau/mat_pvalue_ajust_0|1_vs_1|1_cox.txt")
+
+```
+
+
+
+```{r}
+barplot_cohorte <- ggplot(cbind(fusion_na[,signif],fusion_na[, ncol(tab):ncol(fusion_na)])) +
+  geom_bar(aes(x=project_code))
+ggsave("hist_maladie_signif.pdf", plot=barplot_cohorte, width = 15, device="pdf")
+
+barplot_therapy <- ggplot(cbind(fusion_na[,signif],fusion_na[, ncol(tab):ncol(fusion_na)])) +
+  geom_bar(aes(x=first_therapy_type, fill=project_code))
+ggsave("hist_therapie_signif.pdf", plot=barplot_therapy, width = 15, device="pdf")
+
+ggplot(cbind(fusion_na[,signif],fusion_na[, ncol(tab):ncol(fusion_na)])) + 
+  geom_histogram(aes(x=donor_survival_time), binwidth=500)
+
+```
+
+```{r}
+#Tout ce qui fonctionne pas : 
+cox <- coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + frailty(project_code) + project_code:fusion_na$`21017240`, data= fusion_na)
+cox <- coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + strata(project_code), data= fusion_na)
+
+
+```
+
+
+```{r}
+X = fusion_na[,signif]
+data = fusion_na
+res.mca = MCA(X,ncp=2) #5=nb de facteurs par défaut
+tmp<-res.mca$ind$coord
+colnames(tmp)<-paste0("Factor",1:ncol(tmp))
+data<-cbind(data,tmp)
+summary(cox<-coxph(formula(paste0("Surv(donor_survival_time, death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data))
+```
+
+sur radiothérapie
+```{r}
+radio <- which(fusion_na$first_therapy_type%in%c("radiation therapy", "combined chemo+radiation therapy"))
+data = fusion_na[radio,]
+cox<-coxph(Surv(donor_survival_time/365.25, death) ~ data$`21017240` + strata(project_code), data=data)
+
+data1 <- data[which(data$`21017240` %in% c("0|0", "0|1")),]
+data1$`21017240` <- factor(data1$`21017240`) 
+#0|0 vs 1|1
+data2 <- data[which(data$`21017240` %in% c("0|0", "1|1")),]
+data2$`21017240` <- factor(data2$`21017240`) 
+#0|1 vs 1|1 
+data3 <- data[which(data$`21017240` %in% c("0|1", "1|1")),]
+data3$`21017240` <- factor(data3$`21017240`) 
+
+cox1<-coxph(Surv(donor_survival_time/365.25, death) ~ data1$`21017240` + strata(project_code), data=data1)
+cox2<-coxph(Surv(donor_survival_time/365.25, death) ~ data2$`21017240` + strata(project_code)  , data=data2)
+cox3<-coxph(Surv(donor_survival_time/365.25, death) ~ data3$`21017240` + strata(project_code), data=data3)
 
 ```
 
