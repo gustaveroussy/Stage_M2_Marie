@@ -390,6 +390,8 @@ mat_pvalue_survie1_cox <- matrix(NA, ncol = length(signif), nrow = length(names)
 mat_pvalue_survie2_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie3_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 
+i="PACA-CA"
+j="21017240"
 for (i in names){
   print(i)
   lignes = which(fusion_na$project_code==i)
@@ -423,7 +425,7 @@ for (i in names){
       #data
       KMy_geno<-survfit(Surv(donor_survival_time/365.25, death) ~ data[,j], data=data, conf.type="log-log")
       mat_pvalue_survie[i,j] <- try(surv_pvalue(KMy_geno, data=data)$pval, silent=TRUE)
-      survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
+      survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" "), fontsize=6, font.x=18, font.main=18, font.y=18, font.tickslab=18, font.legend=16), silent=TRUE)
       
       fitCox0 <- NULL
       fitCox0 <-coxph(Surv(donor_survival_time, death) ~ data[,j], data=data)
@@ -431,12 +433,12 @@ for (i in names){
       #save(fitCox0, file=paste("./Survie/nouveau/",i,"/cox_", i,"_", j, ".RData", sep=""))
       
       if(!is(survpy)=="try-error"){
-        try <- try(ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
+        try <- try(ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=10), silent=TRUE)
       
         if (is(try) == "try-error") {
           print("Une seule donnée, impossible de faire un interval de confiance")
           survpy <- ggsurvplot(KMy_geno,risk.table = TRUE,  data=data, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")) 
-          ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15)
+          ggsave(plot=print(survpy), paste(i, j, "years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=13)
         }
         
       }
@@ -449,7 +451,7 @@ for (i in names){
       if(length(unique(data1[,j]))>1 && !all(unique(data[,j]) %in% unique(data1[,j]))){
         KMy_geno<-survfit(Surv(donor_survival_time/365.25, death) ~ data1[,j], data=data1, conf.type="log-log")
         mat_pvalue_survie1[i,j] <- try(surv_pvalue(KMy_geno, data=data1)$pval, silent=TRUE)
-        survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data1,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" ")), silent=TRUE)
+        survpy <- try(ggsurvplot(KMy_geno,risk.table = TRUE,  data=data1,conf.int = TRUE, pval=TRUE, title=paste(i, j, info["REF", j], "-->", info["ALT", j], sep=" "), fontsize=6, font.x=18, font.main=18, font.y=18, font.tickslab=18, font.legend=16), silent=TRUE)
         
         fitCox01 <- NULL
         fitCox01 <-coxph(Surv(donor_survival_time, death) ~ data1[,j], data=data1)
@@ -457,7 +459,7 @@ for (i in names){
         #save(fitCox01, file=paste("./Survie/nouveau/",i,"/cox_0|0_vs_0|1", i,"_", j, ".RData", sep=""))
         
         if(!is(survpy)=="try-error"){
-          try <- try(ggsave(plot=print(survpy), paste(i, j, "0|0_vs_0|1_years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=15), silent=TRUE)
+          try <- try(ggsave(plot=print(survpy), paste(i, j, "0|0_vs_0|1_years_geno.pdf", sep="_"), device="pdf", path=paste("./Survie/Nouveau/",i,"/", sep=""), width=10), silent=TRUE)
         
           if (is(try) == "try-error") {
             print("Une seule donnée, impossible de faire un interval de confiance")
@@ -614,5 +616,23 @@ cox1<-coxph(Surv(donor_survival_time/365.25, death) ~ data1$`21017240` + strata(
 cox2<-coxph(Surv(donor_survival_time/365.25, death) ~ data2$`21017240` + strata(project_code)  , data=data2)
 cox3<-coxph(Surv(donor_survival_time/365.25, death) ~ data3$`21017240` + strata(project_code), data=data3)
 
+```
+
+
+#déséquilibre homozygotes vs hétérozygotes
+```{r}
+conting <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/Fisher/snp_vs_cohorte/conting/21017240.txt")
+conting <- conting[ , colSums(conting) != 0]
+table <- rbind(colSums(conting[c(1,3),]), conting[2,])
+fisher.test(table, simulate.p.value=TRUE)
+```
+```{r}
+conting <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/Fisher/snp_vs_cohorte/conting/21017240.txt")
+conting <- conting[ , colSums(conting) != 0]
+for (i in 1:ncol(conting)){
+  fobs = c(27)
+}
+table <- rbind(colSums(conting[c(1,3),]), conting[2,])
+fisher.test(table, simulate.p.value=TRUE)
 ```
 

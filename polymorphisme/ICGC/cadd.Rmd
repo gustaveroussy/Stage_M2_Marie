@@ -14,8 +14,10 @@ library(ggplot2)
 cadd <- read.xlsx("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/CADD.xlsx", 1, startRow=2, header=TRUE)
 
 plot <- ggplot(cadd) + geom_point(aes(x=POS, y=PHRED, color=PHRED)) +   
-  scale_color_gradient("PHRED", low = "green", high = "red") +
-  geom_hline(yintercept = 10, color="red")
+  scale_color_gradient("PHRED", low = "blue", high = "red") +
+  geom_hline(yintercept = 10, color="red") +
+  geom_vline(xintercept = as.numeric(signif),linetype="dashed", color="grey")
+
 print(plot)
 ggsave(plot=plot, "./CADD/cadd_pos_phred.pdf", device="pdf", width = 15)
 ```
