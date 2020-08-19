@@ -12,6 +12,8 @@ library(questionr)
 library(survival)
 library(survminer)
 library(FactoMineR)
+library(factoextra)
+
 ```
 
 
@@ -310,9 +312,6 @@ write.table(mat_pvalue, "./Fisher/mat_pvalue_cohorte_vs_snp.txt")
 ```
 
 
-
-
-
 #prepare data
 ```{r}
 fusion_na <- fusion[!is.na(fusion$donor_survival_time),]
@@ -390,8 +389,7 @@ mat_pvalue_survie1_cox <- matrix(NA, ncol = length(signif), nrow = length(names)
 mat_pvalue_survie2_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 mat_pvalue_survie3_cox <- matrix(NA, ncol = length(signif), nrow = length(names), dimnames=list(names, signif))
 
-i="PACA-CA"
-j="21017240"
+
 for (i in names){
   print(i)
   lignes = which(fusion_na$project_code==i)
@@ -532,6 +530,7 @@ for (i in names){
     print("Aucune donnée de survie")
   }
 }
+
 #KM
 write.table(mat_pvalue_survie, "./Survie//Nouveau/mat_pvalue_all.txt")
 write.table(mat_pvalue_survie1, "./Survie//Nouveau/mat_pvalue_0|0_vs_0|1.txt")
@@ -565,6 +564,8 @@ write.table(mat_pvalue_survie3_ajdust_cox, "./Survie//Nouveau/mat_pvalue_ajust_0
 
 
 ```{r}
+ggplot(fusion_na) + geom_bar(aes(x=project_code))
+
 barplot_cohorte <- ggplot(cbind(fusion_na[,signif],fusion_na[, ncol(tab):ncol(fusion_na)])) +
   geom_bar(aes(x=project_code))
 ggsave("hist_maladie_signif.pdf", plot=barplot_cohorte, width = 15, device="pdf")
@@ -578,30 +579,109 @@ ggplot(cbind(fusion_na[,signif],fusion_na[, ncol(tab):ncol(fusion_na)])) +
 
 ```
 
+##tous traitements 
+###strates
 ```{r}
-#Tout ce qui fonctionne pas : 
-cox <- coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + frailty(project_code) + project_code:fusion_na$`21017240`, data= fusion_na)
 cox <- coxph(Surv(donor_survival_time, death) ~ fusion_na$`21017240` + strata(project_code), data= fusion_na)
+summary(cox)
 
+data1 <- fusion_na[which(fusion_na$`21017240` %in% c("0|0", "0|1")),]
+data1$`21017240` <- factor(data1$`21017240`) 
+#0|0 vs 1|1
+data2 <- fusion_na[which(fusion_na$`21017240` %in% c("0|0", "1|1")),]
+data2$`21017240` <- factor(data2$`21017240`) 
+#0|1 vs 1|1 
+data3 <- fusion_na[which(fusion_na$`21017240` %in% c("0|1", "1|1")),]
+data3$`21017240` <- factor(data3$`21017240`) 
 
+cox1<-coxph(Surv(donor_survival_time/365.25, death) ~ data1$`21017240` + strata(project_code), data=data1)
+summary(cox1)
+cox2<-coxph(Surv(donor_survival_time/365.25, death) ~ data2$`21017240` + strata(project_code)  , data=data2)
+summary(cox2)
+cox3<-coxph(Surv(donor_survival_time/365.25, death) ~ data3$`21017240` + strata(project_code), data=data3)
+summary(cox3)
+
+rownames<-c("Total",  "0|0vs0|1", "0|0vs1|1", "0|1vs1|1")
+mat_pvalue_survie_cox_strate_ <- matrix(NA, ncol = length(signif), nrow = 4, dimnames=list(rownames, signif))
+data<-fusion_na
+for (j in signif){
+      print(j)
+      print(table(data[,j]))
+      #0|0 vs 0|1
+      data1 <- data[which(data[,j] %in% c("0|0", "0|1")),]
+      data1[,j] <- factor(data1[,j]) 
+
+      #0|0 vs 1|1
+      data2 <- data[which(data[,j] %in% c("0|0", "1|1")),]
+      data2[,j] <- factor(data2[,j]) 
+
+      #0|1 vs 1|1 
+      data3 <- data[which(data[,j] %in% c("0|1", "1|1")),]
+      data3[,j] <- factor(data3[,j]) 
+
+      
+      #en années
+      #data
+      
+      fitCox0 <- NULL
+      fitCox0 <-coxph(Surv(donor_survival_time/365.25, death) ~ data[,j]+ strata(project_code), data=data)
+      mat_pvalue_survie_cox_strate["Total",j]<-summary(fitCox0)$logtest[3]
+     
+      #data1
+      if(length(unique(data1[,j]))>1 && !all(unique(data[,j]) %in% unique(data1[,j]))){
+        
+        fitCox01 <- NULL
+        fitCox01 <-coxph(Surv(donor_survival_time/365.25, death) ~ data1[,j]+ strata(project_code), data=data1)
+        mat_pvalue_survie_cox_strate["0|0vs0|1",j]<-summary(fitCox01)$logtest[3]
+
+      }
+      
+      #data2
+      if(length(unique(data2[,j]))>1 && !all(unique(data[,j]) %in% unique(data2[,j]))){
+        
+        fitCox02 <- NULL
+        fitCox02 <-coxph(Surv(donor_survival_time/365.25, death) ~ data2[,j]+ strata(project_code), data=data2)
+        mat_pvalue_survie_cox_strate["0|0vs1|1",j]<-summary(fitCox02)$logtest[3]
+      }
+      
+      #data3
+      if(length(unique(data3[,j]))>1 && !all(unique(data[,j]) %in% unique(data3[,j]))){
+        fitCox03 <- NULL
+        fitCox03 <-coxph(Surv(donor_survival_time/365.25, death) ~ data3[,j]+ strata(project_code), data=data3)
+        mat_pvalue_survie_cox_strate["0|1vs1|1",j]<-summary(fitCox03)$logtest[3]
+
+  }
+      
+}
+
+mat_pvalue_survie_cox_strate
 ```
 
-
+#MCA 
 ```{r}
-X = fusion_na[,signif]
+
+X = fusion_na[, 2:41]
 data = fusion_na
-res.mca = MCA(X,ncp=2) #5=nb de facteurs par défaut
-tmp<-res.mca$ind$coord
-colnames(tmp)<-paste0("Factor",1:ncol(tmp))
-data<-cbind(data,tmp)
-summary(cox<-coxph(formula(paste0("Surv(donor_survival_time, death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data))
+for  (i in 2:20){
+  res.mca = MCA(X,ncp=i) #5=nb de facteurs par défaut
+  fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45))
+  tmp<-res.mca$ind$coord
+  colnames(tmp)<-paste0("Factor",1:ncol(tmp))
+  data<-cbind(data,tmp)
+  print(summary(cox<-coxph(formula(paste0("Surv(donor_survival_time,   death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data)))
+  
+}
+
 ```
 
-sur radiothérapie
+##sur radiothérapie
 ```{r}
 radio <- which(fusion_na$first_therapy_type%in%c("radiation therapy", "combined chemo+radiation therapy"))
 data = fusion_na[radio,]
+
+## strates 
 cox<-coxph(Surv(donor_survival_time/365.25, death) ~ data$`21017240` + strata(project_code), data=data)
+cox
 
 data1 <- data[which(data$`21017240` %in% c("0|0", "0|1")),]
 data1$`21017240` <- factor(data1$`21017240`) 
@@ -613,26 +693,83 @@ data3 <- data[which(data$`21017240` %in% c("0|1", "1|1")),]
 data3$`21017240` <- factor(data3$`21017240`) 
 
 cox1<-coxph(Surv(donor_survival_time/365.25, death) ~ data1$`21017240` + strata(project_code), data=data1)
+summary(cox1)
 cox2<-coxph(Surv(donor_survival_time/365.25, death) ~ data2$`21017240` + strata(project_code)  , data=data2)
+summary(cox2)
 cox3<-coxph(Surv(donor_survival_time/365.25, death) ~ data3$`21017240` + strata(project_code), data=data3)
+summary(cox3)
 
-```
+rownames<-c("Total",  "0|0vs0|1", "0|0vs1|1", "0|1vs1|1")
+mat_pvalue_survie_cox_strate_radio <- matrix(NA, ncol = length(signif), nrow = 4, dimnames=list(rownames, signif))
 
+for (j in signif){
+      print(j)
+      print(table(data[,j]))
+      #0|0 vs 0|1
+      data1 <- data[which(data[,j] %in% c("0|0", "0|1")),]
+      data1[,j] <- factor(data1[,j]) 
 
-#déséquilibre homozygotes vs hétérozygotes
-```{r}
-conting <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/Fisher/snp_vs_cohorte/conting/21017240.txt")
-conting <- conting[ , colSums(conting) != 0]
-table <- rbind(colSums(conting[c(1,3),]), conting[2,])
-fisher.test(table, simulate.p.value=TRUE)
-```
-```{r}
-conting <- read.table("/Users/m_michel/Documents/stageM2/polymorphisme/ICGC/Fisher/snp_vs_cohorte/conting/21017240.txt")
-conting <- conting[ , colSums(conting) != 0]
-for (i in 1:ncol(conting)){
-  fobs = c(27)
+      #0|0 vs 1|1
+      data2 <- data[which(data[,j] %in% c("0|0", "1|1")),]
+      data2[,j] <- factor(data2[,j]) 
+
+      #0|1 vs 1|1 
+      data3 <- data[which(data[,j] %in% c("0|1", "1|1")),]
+      data3[,j] <- factor(data3[,j]) 
+
+      
+      #en années
+      #data
+      
+      fitCox0 <- NULL
+      fitCox0 <-coxph(Surv(donor_survival_time/365.25, death) ~ data[,j] + strata(project_code), data=data)
+      mat_pvalue_survie_cox_strate_radio["Total",j]<-summary(fitCox0)$logtest[3]
+     
+      #data1
+      if(length(unique(data1[,j]))>1 && !all(unique(data[,j]) %in% unique(data1[,j]))){
+        
+        fitCox01 <- NULL
+        fitCox01 <-coxph(Surv(donor_survival_time/365.25, death) ~ data1[,j]+ strata(project_code), data=data1)
+        mat_pvalue_survie_cox_strate_radio["0|0vs0|1",j]<-summary(fitCox01)$logtest[3]
+
+      }
+      
+      #data2
+      if(length(unique(data2[,j]))>1 && !all(unique(data[,j]) %in% unique(data2[,j]))){
+        
+        fitCox02 <- NULL
+        fitCox02 <-coxph(Surv(donor_survival_time/365.25, death) ~ data2[,j]+ strata(project_code), data=data2)
+        mat_pvalue_survie_cox_strate_radio["0|0vs1|1",j]<-summary(fitCox02)$logtest[3]
+      }
+      
+      #data3
+      if(length(unique(data3[,j]))>1 && !all(unique(data[,j]) %in% unique(data3[,j]))){
+        fitCox03 <- NULL
+        fitCox03 <-coxph(Surv(donor_survival_time/365.25, death) ~ data3[,j]+ strata(project_code), data=data3)
+        mat_pvalue_survie_cox_strate_radio["0|1vs1|1",j]<-summary(fitCox03)$logtest[3]
+
+  }
+      
 }
-table <- rbind(colSums(conting[c(1,3),]), conting[2,])
-fisher.test(table, simulate.p.value=TRUE)
+
+mat_pvalue_survie_cox_strate_radio
+
+
+## MCA 
+data_radio = fusion_na[radio,]
+X = data[, 2:41]
+
+res.mca = MCA(X,10)
+fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45))
+tmp <- res.mca$ind$coord
+tmp <- tmp[,1:6]
+colnames(tmp)<-paste0("Factor",1:ncol(tmp))
+data_radio<-cbind(data_radio,tmp)
+print(summary(cox<-coxph(formula(paste0("Surv(donor_survival_time,   death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data_radio)))
+
+cox  <- coxph(Surv(donor_survival_time, death)~strata(project_code)+Factor4, data=data_radio)
+
 ```
+
+
 
