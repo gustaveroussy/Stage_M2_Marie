@@ -662,15 +662,14 @@ mat_pvalue_survie_cox_strate
 
 X = fusion_na[, 2:41]
 data = fusion_na
-for  (i in 2:20){
-  res.mca = MCA(X,ncp=i) #5=nb de facteurs par défaut
-  fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45))
-  tmp<-res.mca$ind$coord
-  colnames(tmp)<-paste0("Factor",1:ncol(tmp))
-  data<-cbind(data,tmp)
-  print(summary(cox<-coxph(formula(paste0("Surv(donor_survival_time,   death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data)))
-  
-}
+
+res.mca = MCA(X,ncp=10) #5=nb de facteurs par défaut
+print(fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45)))
+tmp<-res.mca$ind$coord
+colnames(tmp)<-paste0("Factor",1:ncol(tmp))
+data<-cbind(data,tmp)
+print(summary(cox<-coxph(formula(paste0("Surv(donor_survival_time,   death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data)))
+
 
 ```
 
@@ -757,7 +756,7 @@ mat_pvalue_survie_cox_strate_radio
 
 ## MCA 
 data_radio = fusion_na[radio,]
-X = data[, 2:41]
+X = data_radio[, 2:41]
 
 res.mca = MCA(X,10)
 fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45))
@@ -767,7 +766,7 @@ colnames(tmp)<-paste0("Factor",1:ncol(tmp))
 data_radio<-cbind(data_radio,tmp)
 print(summary(cox<-coxph(formula(paste0("Surv(donor_survival_time,   death)~strata(project_code)+",paste(colnames(tmp),collapse="+"))),data=data_radio)))
 
-cox  <- coxph(Surv(donor_survival_time, death)~strata(project_code)+Factor4, data=data_radio)
+summary(res.mca, nbelements = Inf, ncp=6)
 
 ```
 
